@@ -23,23 +23,24 @@ CDP_PORT="${COVIEW_CDP_PORT:-9222}"
 # Playwright's "Chrome for Testing" works (unlike branded Chrome 137+, which
 # disabled --load-extension). Auto-discover it; override with $COVIEW_CHROME.
 find_chrome() {
-  if [ -n "${COVIEW_CHROME:-}" ]; then echo "$COVIEW_CHROME"; return; fi
-  local base
+  if [ -n "${COVIEW_CHROME:-}" ]; then echo "$COVIEW_CHROME"; return 0; fi
+  local base found=""
   if [ "$(uname)" = "Darwin" ]; then base="$HOME/Library/Caches/ms-playwright"; else base="$HOME/.cache/ms-playwright"; fi
-  local patterns=(
-    "$base"/chromium-[0-9]*/chrome-mac-arm64/"Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
-    "$base"/chromium-[0-9]*/chrome-mac-x64/"Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
-    "$base"/chromium-[0-9]*/chrome-linux/chrome
-  )
+  # Globs expand inline here (quoted segments keep the spaces in "Google Chrome
+  # for Testing" intact); unmatched globs stay literal and fail the -x test.
+  # Last executable match wins → newest chromium-<n>.
   local p
-  for p in "${patterns[@]}"; do
-    # shellcheck disable=SC2086
-    local hit; hit="$(ls -d $p 2>/dev/null | sort -V | tail -1 || true)"
-    [ -n "$hit" ] && [ -x "$hit" ] && { echo "$hit"; return; }
+  for p in \
+    "$base"/chromium-[0-9]*/chrome-mac-arm64/"Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" \
+    "$base"/chromium-[0-9]*/chrome-mac-x64/"Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing" \
+    "$base"/chromium-[0-9]*/chrome-linux/chrome ; do
+    [ -x "$p" ] && found="$p"
   done
+  [ -n "$found" ] && echo "$found"
+  return 0
 }
 
-CHROME="$(find_chrome)"
+CHROME="$(find_chrome || true)"
 if [ -z "$CHROME" ]; then
   echo "No Playwright Chromium found. Install it with:  npx playwright install chromium"
   echo "(or set COVIEW_CHROME to a Chromium binary that supports --load-extension)"
