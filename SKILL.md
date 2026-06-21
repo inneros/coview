@@ -70,8 +70,9 @@ Send one `./reply.sh "coview is live — point at anything"` so the user sees it
 
 ## Notes
 
-- Keep exactly **one** `watch.sh` running. Before re-arming, ensure no stray ones
-  (`pkill -f watch.sh`), then start one tracked instance.
+- `watch.sh` self-dedupes via a PID lock (`$COVIEW_DIR/watch.pid`) — just re-run it
+  as a tracked background task and it kills any prior instance automatically. No
+  need to pkill stale ones first.
 - State lives in `~/.coview` (`COVIEW_DIR`). The panel state resets on reload — that's
   fine, the real conversation state is in this session.
 - Never expose the bridge (7777) or CDP (9222) ports to a network.
