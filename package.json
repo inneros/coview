@@ -1,0 +1,16 @@
+{
+  "name": "coview",
+  "version": "0.1.0",
+  "description": "Co-view any live page with your Claude Code session — a draggable chat panel in the browser, wired to the exact tab Claude drives.",
+  "type": "module",
+  "bin": { "coview-bridge": "bridge.mjs" },
+  "scripts": {
+    "bridge": "node bridge.mjs",
+    "launch": "bash launch.sh"
+  },
+  "keywords": ["claude", "claude-code", "playwright", "mcp", "browser", "feedback", "chrome-extension"],
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "repository": { "type": "git", "url": "https://github.com/inneros/coview.git" },
+  "files": ["bridge.mjs", "launch.sh", "watch.sh", "reply.sh", "extension", "SKILL.md", "README.md", "LICENSE"]
+}

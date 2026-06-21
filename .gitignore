@@ -1,0 +1,6 @@
+# coview runtime state (inbox/outbox/cursor)
+.coview/
+# editor / OS noise
+.DS_Store
+node_modules/
+*.log
