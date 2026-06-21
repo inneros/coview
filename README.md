@@ -9,6 +9,8 @@ Claude *sees the exact tab you see*, edits the code, and you watch it change liv
 > You and Claude, looking at the same screen. You point. It fixes. The page updates
 > in place.
 
+![coview demo — pin an element, ask, and watch it change live](./assets/demo.gif)
+
 ```
    YOUR BROWSER  (a real page — your local dev site, or anything)
    ┌─────────────────────────────────────────────┐
@@ -145,13 +147,18 @@ design guarantees no missed and no repeated messages.
 
 ## Theming
 
-The panel theme is a single object at the top of `extension/content.js`:
+coview ships with a warm default palette. Re-theme **per instance without touching
+the repo** — the bridge serves a theme that the panel reads on boot:
 
-```js
-const THEME = { bg: '#ffffff', ink: '#111827', accent: '#4f46e5', line: '#e5e7eb' };
+- **`$COVIEW_DIR/theme.json`** (default `~/.coview/theme.json`), or
+- **`COVIEW_THEME`** as a JSON env var.
+
+```json
+{ "bg": "#ffffff", "ink": "#111827", "accent": "#4f46e5", "line": "#e5e7eb" }
 ```
 
-Edit it and reload the extension. Default is a neutral light theme.
+Keys (`bg`, `ink`, `accent`, `line`) are all optional; unset ones keep the default.
+The shipped default lives in `DEFAULTS` at the top of `extension/content.js`.
 
 ## Configuration
 
@@ -159,7 +166,8 @@ Edit it and reload the extension. Default is a neutral light theme.
 |-----|---------|------|
 | `COVIEW_PORT` | `7777` | bridge port (also set in `extension/background.js`) |
 | `COVIEW_CDP_PORT` | `9222` | Chromium remote-debugging port (match `--cdp-endpoint`) |
-| `COVIEW_DIR` | `~/.coview` | state dir (`inbox.jsonl` / `outbox.jsonl` / `cursor`) |
+| `COVIEW_DIR` | `~/.coview` | state dir (`inbox.jsonl` / `outbox.jsonl` / `cursor` / `theme.json`) |
+| `COVIEW_THEME` | — | JSON theme override (or use `$COVIEW_DIR/theme.json`) |
 | `COVIEW_CHROME` | auto | explicit Chromium binary (skips auto-discovery) |
 
 ---

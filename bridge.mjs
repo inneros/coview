@@ -71,6 +71,16 @@ const server = http.createServer(async (req, res) => {
     return json(res, 200, { messages: lines(OUTBOX).filter((m) => m.id > after) });
   }
 
+  // panel theme override — read by content.js on boot. Source order:
+  //   1. $COVIEW_DIR/theme.json   2. $COVIEW_THEME (JSON env)   3. {} (neutral default)
+  // Keeps your brand out of the committed repo.
+  if (req.method === 'GET' && url.pathname === '/theme') {
+    let theme = {};
+    try { theme = JSON.parse(fs.readFileSync(path.join(DIR, 'theme.json'), 'utf8')); }
+    catch { try { theme = JSON.parse(process.env.COVIEW_THEME || '{}'); } catch {} }
+    return json(res, 200, { theme });
+  }
+
   // fallback chat page (works even without the extension): open http://localhost:7777
   if (req.method === 'GET' && url.pathname === '/') {
     cors(res);
@@ -88,14 +98,14 @@ server.listen(PORT, '127.0.0.1', () =>
 const FALLBACK_HTML = `<!doctype html><meta charset=utf8>
 <title>coview</title>
 <style>
- body{font-family:Inter,system-ui;margin:0;background:#ffffff;color:#111827}
+ body{font-family:Inter,system-ui;margin:0;background:#FBF8F0;color:#1A1814}
  #log{padding:16px;height:calc(100vh - 70px);overflow:auto}
  .m{margin:8px 0;padding:10px 12px;border-radius:12px;max-width:70%;white-space:pre-wrap}
- .you{background:#111827;color:#fff;margin-left:auto}
- .claude{background:#fff;border:1px solid #e5e7eb}
- form{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:12px;background:#fff;border-top:1px solid #e5e7eb}
- input{flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:10px;font-size:15px}
- button{padding:0 18px;border:0;border-radius:10px;background:#4f46e5;color:#fff;font-weight:600;cursor:pointer}
+ .you{background:#1A1814;color:#FBF8F0;margin-left:auto}
+ .claude{background:#fff;border:1px solid #e7e0cf}
+ form{position:fixed;bottom:0;left:0;right:0;display:flex;gap:8px;padding:12px;background:#FBF8F0;border-top:1px solid #e7e0cf}
+ input{flex:1;padding:12px;border:1px solid #e7e0cf;border-radius:10px;font-size:15px}
+ button{padding:0 18px;border:0;border-radius:10px;background:#D4A84B;color:#1A1814;font-weight:600;cursor:pointer}
 </style>
 <div id=log></div>
 <form id=f><input id=t placeholder="Tell Claude what you see..." autocomplete=off><button>Send</button></form>

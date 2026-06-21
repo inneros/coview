@@ -2,16 +2,21 @@
 // Code session via the local bridge; replies poll back in. Alt-click any element
 // to "pin" it so Claude knows exactly which thing you mean.
 //
-// Theme: edit THEME below (or override per-page via CSS on #coview-root).
+// Theme: ships with the DEFAULTS below; override per-instance via the bridge
+// (COVIEW_DIR/theme.json or $COVIEW_THEME) without editing this file. See README.
 (() => {
   if (window.__coview) return;
   window.__coview = true;
 
   // Injected at document_idle by the extension; may run at document_start when
   // injected another way. Defer DOM work until the document exists.
-  const boot = () => {
-  const THEME = { bg: '#ffffff', ink: '#111827', accent: '#4f46e5', line: '#e5e7eb' };
-  const C = { bg: THEME.bg, ink: THEME.ink, accent: THEME.accent, line: THEME.line };
+  const boot = async () => {
+  // Neutral defaults; override per-instance via the bridge (COVIEW_DIR/theme.json
+  // or $COVIEW_THEME) so a brand never ships in the repo. See README → Theming.
+  const DEFAULTS = { bg: '#FBF8F0', ink: '#1A1814', accent: '#D4A84B', line: '#e7e0cf' };
+  let override = {};
+  try { const t = await chrome.runtime.sendMessage({ type: 'theme' }); if (t && t.ok) override = t.data.theme || {}; } catch {}
+  const C = { ...DEFAULTS, ...override };
   let seen = 0;
   let pinned = '';
 
@@ -74,7 +79,7 @@
       .ft { display: flex; gap: 8px; padding: 10px; border-top: 1px solid ${C.line}; }
       .ft input { flex: 1; padding: 10px; border: 1px solid ${C.line}; border-radius: 10px; font-size: 14px; }
       .ft button { padding: 0 16px; border: 0; border-radius: 10px; background: ${C.accent};
-                   color: #fff; font-weight: 600; cursor: pointer; }
+                   color: ${C.ink}; font-weight: 600; cursor: pointer; }
       .hint { font-size: 11px; opacity: .5; padding: 0 12px 8px; }
     </style>
     <div class="bubble" title="Talk to Claude">◆</div>

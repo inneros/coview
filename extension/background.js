@@ -19,6 +19,9 @@ chrome.runtime.onMessage.addListener((req, _sender, sendResponse) => {
       } else if (req.type === 'poll') {
         const r = await fetch(`${BASE}/poll?after=${req.after || 0}`);
         sendResponse({ ok: true, data: await r.json() });
+      } else if (req.type === 'theme') {
+        const r = await fetch(`${BASE}/theme`);
+        sendResponse({ ok: true, data: await r.json() });
       } else {
         sendResponse({ ok: false, error: 'unknown' });
       }
