@@ -59,8 +59,9 @@ self-heals via a MutationObserver.
 Run `./watch.sh` as a **tracked background task**. It blocks until the user sends a
 panel message, prints the message(s), and exits — which re-invokes you. On wake:
 
-1. Read the printed JSON line(s): `{ text, pageUrl, selector }`.
-2. Act — screenshot/inspect the pinned `selector` via the Playwright MCP, edit code,
+1. Read the printed JSON line(s): `{ text, pageUrl, selector, selectors }` —
+   `selectors` is the array of pinned elements (`selector` is them joined, for compat).
+2. Act — screenshot/inspect the pinned element(s) via the Playwright MCP, edit code,
    etc.
 3. Reply into the panel: `./reply.sh "<your reply>"`.
 4. Re-run `./watch.sh` (background) to wait for the next message.

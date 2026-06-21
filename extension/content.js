@@ -18,7 +18,7 @@
   try { const t = await chrome.runtime.sendMessage({ type: 'theme' }); if (t && t.ok) override = t.data.theme || {}; } catch {}
   const C = { ...DEFAULTS, ...override };
   let seen = 0;
-  let pinned = '';
+  let pins = [];
 
   // ---- selector for a pinned element (short + good enough to locate) ----
   const selectorFor = (el) => {
@@ -71,11 +71,13 @@
       .m { padding: 9px 12px; border-radius: 12px; max-width: 80%; white-space: pre-wrap; font-size: 14px; line-height: 1.45; }
       .you { background: ${C.ink}; color: ${C.bg}; align-self: flex-end; }
       .claude { background: ${C.bg}; border: 1px solid ${C.line}; align-self: flex-start; }
-      .pin { margin: 0 12px; font-size: 12px; color: ${C.ink}; opacity: .75;
-             display: none; align-items: center; gap: 6px; }
-      .pin.show { display: flex; }
-      .pin code { background: ${C.bg}; border: 1px solid ${C.line}; padding: 1px 5px; border-radius: 5px; }
-      .pin button { border: 0; background: none; cursor: pointer; opacity: .6; }
+      .pins { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 6px; }
+      .pins:empty { display: none; }
+      .chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: ${C.ink};
+              background: ${C.bg}; border: 1px solid ${C.line}; border-radius: 999px; padding: 2px 4px 2px 8px; max-width: 100%; }
+      .chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 220px; }
+      .chip button { border: 0; background: none; cursor: pointer; opacity: .55; font-size: 13px; line-height: 1; padding: 0 2px; }
+      .chip button:hover { opacity: 1; }
       .ft { display: flex; gap: 8px; padding: 10px; border-top: 1px solid ${C.line}; }
       .ft input { flex: 1; padding: 10px; border: 1px solid ${C.line}; border-radius: 10px; font-size: 14px; }
       .ft button { padding: 0 16px; border: 0; border-radius: 10px; background: ${C.accent};
@@ -86,8 +88,8 @@
     <div class="panel">
       <div class="hd"><span>Claude · live</span><span class="hd-r"><small id="st">connecting…</small><button id="min" title="Minimize">–</button></span></div>
       <div class="log" id="log"></div>
-      <div class="pin" id="pin"><span>pinned <code id="pinsel"></code></span><button id="unpin">✕</button></div>
-      <div class="hint">Alt-click any element on the page to pin it.</div>
+      <div class="pins" id="pins"></div>
+      <div class="hint">Alt-click elements to pin them (multiple) — all sent with your message.</div>
       <div class="ft"><input id="t" placeholder="What do you see?" autocomplete="off"><button id="send">Send</button></div>
     </div>`;
   document.documentElement.appendChild(root);
@@ -110,7 +112,24 @@
   };
 
   $('.bubble').onclick = () => $('.panel').classList.toggle('open');
-  $('#unpin').onclick = () => { pinned = ''; $('#pin').classList.remove('show'); };
+
+  // render the pinned-element chips (each removable)
+  const renderPins = () => {
+    const box = $('#pins');
+    box.innerHTML = '';
+    pins.forEach((sel, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      const label = document.createElement('span');
+      label.textContent = sel;
+      label.title = sel;
+      const x = document.createElement('button');
+      x.textContent = '✕';
+      x.onclick = () => { pins.splice(i, 1); renderPins(); };
+      chip.append(label, x);
+      box.appendChild(chip);
+    });
+  };
 
   // minimize: collapse the panel back to the bubble (don't let it start a drag)
   $('#min').addEventListener('pointerdown', (e) => e.stopPropagation());
@@ -145,8 +164,8 @@
     if (!text) return;
     add(text, 'you');
     inp.value = '';
-    const payload = { text, pageUrl: location.href, selector: pinned };
-    pinned = ''; $('#pin').classList.remove('show');
+    const payload = { text, pageUrl: location.href, selectors: pins.slice(), selector: pins.join(', ') };
+    pins = []; renderPins();
     const r = await chrome.runtime.sendMessage({ type: 'send', payload });
     $('#st').textContent = r && r.ok ? 'sent ✓' : 'bridge offline';
   };
@@ -158,9 +177,9 @@
     if (!e.altKey) return;
     if (root.contains(e.target)) return;
     e.preventDefault(); e.stopPropagation();
-    pinned = selectorFor(e.target);
-    $('#pinsel').textContent = pinned.length > 42 ? pinned.slice(0, 42) + '…' : pinned;
-    $('#pin').classList.add('show');
+    const sel = selectorFor(e.target);
+    if (!pins.includes(sel)) pins.push(sel);
+    renderPins();
     $('.panel').classList.add('open');
     const el = e.target;
     const o = el.style.outline; el.style.outline = `2px solid ${C.accent}`;

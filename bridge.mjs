@@ -52,9 +52,9 @@ const server = http.createServer(async (req, res) => {
 
   // browser -> session
   if (req.method === 'POST' && url.pathname === '/msg') {
-    const { text = '', pageUrl = '', selector = '' } = await body(req);
+    const { text = '', pageUrl = '', selector = '', selectors = [] } = await body(req);
     if (!text.trim()) return json(res, 400, { ok: false, error: 'empty' });
-    append(INBOX, { ts: Date.now(), text, pageUrl, selector });
+    append(INBOX, { ts: Date.now(), text, pageUrl, selector, selectors });
     return json(res, 200, { ok: true, id: lines(INBOX).length });
   }
 
