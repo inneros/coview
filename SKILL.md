@@ -9,7 +9,18 @@ Goal: the user types in a panel docked in a real browser tab; you (this session)
 that exact tab via the Playwright MCP, act, and reply into the panel. Local only.
 
 Run these steps in order. Assume the repo root is the current directory (it contains
-`launch.sh`, `bridge.mjs`, `watch.sh`, `reply.sh`, `extension/`).
+`launch.sh`, `bridge.mjs`, `watch.sh`, `reply.sh`, `install-hooks.sh`, `hooks/`,
+`extension/`).
+
+## 0. Register the Stop hook (once)
+
+Run `./install-hooks.sh`. It adds coview's `hooks/stop-hook.sh` as a `Stop` hook in
+`~/.claude/settings.json` (idempotent — safe to run every time; it never duplicates
+or clobbers other settings). This hook is what keeps the channel alive **during** a
+turn: on every attempt to end a turn it checks the inbox and, if there are unread
+panel messages, prints them and exits 2 — which makes you keep working on them
+instead of stopping. It is **inert** in any session that isn't a live coview session
+(it only acts while `$COVIEW_DIR/active` exists, which `launch.sh` creates).
 
 ## 1. Ensure the Playwright CDP MCP server exists
 
@@ -54,22 +65,35 @@ browser_evaluate(() => !!document.getElementById('coview-root'))
 If it's `false` on a framework page, wait ~2s and re-check (hydration); the panel
 self-heals via a MutationObserver.
 
-## 4. Arm the wake loop
+## 4. Arm the idle bootstrap (watch.sh)
 
-Run `./watch.sh` as a **tracked background task**. It blocks until the user sends a
-panel message, prints the message(s), and exits — which re-invokes you. On wake:
+Two mechanisms keep the channel alive; this step arms the second:
+
+- **Mid-turn** is already covered by the Stop hook from step 0 — any message that
+  lands while you're working is delivered to you automatically on your next attempt
+  to stop. You do **not** need to re-arm anything for those.
+- **Fully idle** is what `watch.sh` covers: a Stop hook can't fire on a session
+  that has already stopped, so run `./watch.sh` as a **tracked background task** to
+  catch a message that arrives while you're idle. It blocks until the user sends a
+  panel message, prints it, and exits — which re-invokes you.
+
+On wake (from either path):
 
 1. Read the printed JSON line(s): `{ text, pageUrl, selector, selectors }` —
    `selectors` is the array of pinned elements (`selector` is them joined, for compat).
 2. Act — screenshot/inspect the pinned element(s) via the Playwright MCP, edit code,
    etc.
 3. Reply into the panel: `./reply.sh "<your reply>"`.
-4. Re-run `./watch.sh` (background) to wait for the next message.
+4. Re-run `./watch.sh` (background) so the idle path is armed again for the next time
+   you go fully idle.
 
 Send one `./reply.sh "coview is live — point at anything"` so the user sees it.
 
 ## Notes
 
+- The Stop hook and `watch.sh` share the same `$COVIEW_DIR/cursor` file, so a message
+  is delivered exactly once regardless of which one catches it — no missed, no
+  repeated.
 - `watch.sh` self-dedupes via a PID lock (`$COVIEW_DIR/watch.pid`) — just re-run it
   as a tracked background task and it kills any prior instance automatically. No
   need to pkill stale ones first.

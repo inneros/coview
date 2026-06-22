@@ -42,13 +42,23 @@ There is no inbound channel into a running Claude Code session — so coview use
 ```
 panel → POST /msg → bridge → inbox.jsonl
                                   │
-                         watch.sh blocks on it; a new line makes it EXIT,
-                         which makes the Claude Code harness re-invoke the
-                         session with the message.
+              ┌───────────────────┴───────────────────┐
+              │                                        │
+   MID-TURN: the Stop hook fires on every     IDLE: watch.sh (one tracked
+   attempt to end a turn; if inbox has        background task) blocks on the
+   unread lines it prints them + exits 2,     inbox; a new line makes it EXIT,
+   which BLOCKS the stop and feeds them to     which re-invokes the session.
+   the session — so messages that land
+   during a long turn are never lost.
+              │                                        │
+              └───────────────────┬───────────────────┘
                                   │
 session acts (sees the tab via the Playwright MCP), then:
    reply.sh → POST /reply → outbox.jsonl → panel polls it → shows the reply
 ```
+
+Both paths share the same `cursor` file, so a message is delivered exactly once no
+matter which one catches it.
 
 The panel reaches Claude's eyes because Claude's **Playwright MCP is attached to the
 same Chromium tab** over the Chrome DevTools Protocol (CDP). That attach is the one
@@ -95,12 +105,15 @@ port 9222, Claude's `playwright-cdp` tools control that exact tab.
 
 ```bash
 git clone https://github.com/inneros/coview.git && cd coview
-chmod +x *.sh
+chmod +x *.sh hooks/*.sh
 
-# 1. open the browser + bridge, pointed at your page
+# 1. register the Stop hook once (idempotent) — keeps the channel alive mid-turn
+./install-hooks.sh
+
+# 2. open the browser + bridge, pointed at your page
 ./launch.sh http://localhost:3000
 
-# 2. in Claude Code: make sure playwright-cdp is in .mcp.json (see above), run /mcp,
+# 3. in Claude Code: make sure playwright-cdp is in .mcp.json (see above), run /mcp,
 #    then tell Claude:  "attach to the coview tab and arm the watcher"
 ```
 
@@ -115,33 +128,53 @@ Paste this into your Claude Code session. It codifies the whole setup; `SKILL.md
 this repo is the same instructions as an installable skill.
 
 > **coview setup**
-> 1. Ensure a `playwright-cdp` MCP server exists in `.mcp.json` with args
+> 1. Run `./install-hooks.sh` once — it registers coview's Stop hook in
+>    `~/.claude/settings.json` (idempotent) so panel messages that arrive mid-turn
+>    are never lost. It's inert outside a live coview session.
+> 2. Ensure a `playwright-cdp` MCP server exists in `.mcp.json` with args
 >    `["@playwright/mcp@latest", "--cdp-endpoint", "http://localhost:9222"]`. If you
 >    add it, tell me to run `/mcp` to reconnect, then continue.
-> 2. Run `./launch.sh <URL>` (default `http://localhost:3000`) as a background task —
->    it starts the bridge and opens Chromium with the extension on CDP :9222.
-> 3. Attach: call the `playwright-cdp` `browser_tabs(list)` tool until it returns the
+> 3. Run `./launch.sh <URL>` (default `http://localhost:3000`) as a background task —
+>    it starts the bridge, opens Chromium with the extension on CDP :9222, and arms
+>    the Stop hook by creating the `active` sentinel.
+> 4. Attach: call the `playwright-cdp` `browser_tabs(list)` tool until it returns the
 >    tab, then `browser_navigate` to the target URL if needed.
-> 4. Arm the loop: run `./watch.sh` as a **tracked background task**. When it exits it
->    hands you the new panel message(s) — act on them (screenshot the pinned element,
->    edit code), then `./reply.sh "<your reply>"` and re-run `./watch.sh`.
-> 5. Confirm by sending one `./reply.sh "coview is live"` so I see it in the panel.
+> 5. Arm the idle path: run `./watch.sh` as a **tracked background task**. It catches
+>    a message that arrives while the session is fully idle (the Stop hook can't fire
+>    on an already-stopped session). When it exits it hands you the new panel
+>    message(s) — act on them (screenshot the pinned element, edit code), then
+>    `./reply.sh "<your reply>"` and re-run `./watch.sh`. Messages that arrive
+>    mid-turn are handled automatically by the Stop hook — no manual re-arm needed.
+> 6. Confirm by sending one `./reply.sh "coview is live"` so I see it in the panel.
 
 ---
 
 ## The wake loop (for the curious)
 
-`watch.sh` is a one-shot-but-resumable blocker:
+Two mechanisms keep the channel alive, each covering what the other can't:
 
-- It reads a `cursor` (how many inbox lines are already handled), then polls
-  `inbox.jsonl`. When new lines appear it **prints them all and exits** — exiting is
-  what makes the Claude Code harness re-invoke the session.
-- On wake, Claude handles the message(s), advances nothing manually (the cursor file
-  is updated by the script), and **re-runs `watch.sh`** to wait for the next one.
+**1. The Stop hook (mid-turn) — `hooks/stop-hook.sh`.** Claude Code runs a `Stop`
+hook every time the assistant tries to *end a turn*. coview's hook checks the inbox:
+if there are unread lines it prints them to stderr, advances the `cursor`, and
+**exits 2** — which tells Claude Code to **block the stop and feed that stderr back
+to the model** as a new prompt. So a panel message that arrives in the middle of a
+long turn (many tool calls, no natural stop) is picked up the instant the turn tries
+to end, instead of sitting unread until the session happens to re-arm a watcher. The
+cursor is the loop guard: once delivered, a later stop with no *new* lines exits 0
+and the turn ends normally. The hook is **inert** in any non-coview session — it
+only does anything while `$COVIEW_DIR/active` exists (created by `launch.sh`,
+removed when it exits). Install it once with `./install-hooks.sh` (idempotent).
 
-This is deliberate: a plain `tail -f | grep` never exits with a single match (tail
-keeps the pipe open), so the session never wakes. The cursor + exit-on-new-line
-design guarantees no missed and no repeated messages.
+**2. `watch.sh` (idle bootstrap) — a one-shot-but-resumable blocker.** A Stop hook
+can only fire when the assistant *attempts to stop*; it cannot fire on a session
+that is already fully idle. `watch.sh` covers that gap: run once as a tracked
+background task, it polls `inbox.jsonl` and, when a line arrives while the session
+sits idle, **prints it and exits** — exiting is what re-invokes the session.
+
+- Both read/advance the **same `cursor` file**, so a message is delivered exactly
+  once whether the hook or the watcher catches it — no missed, no repeated.
+- `watch.sh` exists because a plain `tail -f | grep` never exits on a single match
+  (tail holds the pipe open), so the session would never wake.
 
 ---
 

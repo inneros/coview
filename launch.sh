@@ -18,6 +18,7 @@ set -euo pipefail
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 URL="${1:-http://localhost:3000}"
 CDP_PORT="${COVIEW_CDP_PORT:-9222}"
+COVIEW_DIR="${COVIEW_DIR:-$HOME/.coview}"
 
 # --- find a Chromium that honors --load-extension ---------------------------
 # Playwright's "Chrome for Testing" works (unlike branded Chrome 137+, which
@@ -51,7 +52,12 @@ fi
 echo "[1/2] starting bridge…"
 node "$DIR/bridge.mjs" &
 BRIDGE_PID=$!
-trap 'kill $BRIDGE_PID 2>/dev/null || true' EXIT
+# Sentinel that arms the Stop hook (hooks/stop-hook.sh). It is the ONLY thing that
+# makes the hook non-inert, so the hook does nothing outside a live coview session.
+# Removed on exit so the hook goes quiet the moment coview closes.
+mkdir -p "$COVIEW_DIR"
+touch "$COVIEW_DIR/active"
+trap 'kill $BRIDGE_PID 2>/dev/null || true; rm -f "$COVIEW_DIR/active"' EXIT
 sleep 1
 
 # --- 2) Chromium with the extension + CDP, isolated profile -----------------
